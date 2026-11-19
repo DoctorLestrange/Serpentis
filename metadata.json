@@ -1,0 +1,6 @@
+{
+  "name": "Serpentis — Tactile Arcade Snake",
+  "description": "A studio-grade classic snake game featuring 4 game modes, deterministic turn queuing, 60 FPS sub-tick interpolation, customizable rules, handcrafted stages, and procedural audio.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
