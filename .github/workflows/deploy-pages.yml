@@ -46,7 +46,7 @@ jobs:
         run: npm test
 
       - name: Setup GitHub Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Build production bundle for GitHub Pages
         env:
