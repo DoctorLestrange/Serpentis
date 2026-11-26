@@ -55,6 +55,7 @@ export const StatusModal: React.FC<StatusModalProps> = ({
   } | null>(null);
 
   const lastInitializedRunRef = React.useRef<string>('');
+  const savedRunIdRef = React.useRef<string>('');
 
   useEffect(() => {
     if (
@@ -87,7 +88,8 @@ export const StatusModal: React.FC<StatusModalProps> = ({
       newlyUnlockedAchievements: [],
     };
     const isCurrentRunSaved =
-      savedRecord !== null && savedRecord.runEntryId === snap.runEntryId;
+      savedRunIdRef.current === snap.runEntryId ||
+      (savedRecord !== null && savedRecord.runEntryId === snap.runEntryId);
     const trimmed = playerName.trim();
     const hasNextStage =
       snap.victory &&
@@ -95,7 +97,8 @@ export const StatusModal: React.FC<StatusModalProps> = ({
       snap.stage < CAMPAIGN_STAGES.length;
 
     const autoSaveIfNeeded = () => {
-      if (!isCurrentRunSaved && trimmed.length > 0) {
+      if (!isCurrentRunSaved && savedRunIdRef.current !== snap.runEntryId && trimmed.length > 0) {
+        savedRunIdRef.current = snap.runEntryId;
         const { rank, savedName } = onSaveHallOfFame(trimmed, snap);
         setSavedRecord({
           runEntryId: snap.runEntryId,
@@ -106,6 +109,7 @@ export const StatusModal: React.FC<StatusModalProps> = ({
     };
 
     const onWindowKeyDown = (e: KeyboardEvent) => {
+      if (e.repeat) return;
       const activeEl = document.activeElement;
       const isInput =
         activeEl instanceof HTMLElement &&
@@ -306,13 +310,15 @@ export const StatusModal: React.FC<StatusModalProps> = ({
   );
 
   const isCurrentRunSaved =
-    savedRecord !== null && savedRecord.runEntryId === snap.runEntryId;
+    savedRunIdRef.current === snap.runEntryId ||
+    (savedRecord !== null && savedRecord.runEntryId === snap.runEntryId);
   const trimmedInput = playerName.trim();
 
   const handleCommitHallOfFame = (nameToSave: string) => {
-    if (isCurrentRunSaved) return;
+    if (isCurrentRunSaved || savedRunIdRef.current === snap.runEntryId) return;
     const clean = nameToSave.trim();
     if (!clean) return;
+    savedRunIdRef.current = snap.runEntryId;
     setPlayerName(clean);
     const { rank, savedName } = onSaveHallOfFame(clean, snap);
     setSavedRecord({
@@ -323,7 +329,12 @@ export const StatusModal: React.FC<StatusModalProps> = ({
   };
 
   const ensureSavedBeforeExit = (action: () => void) => {
-    if (!isCurrentRunSaved && trimmedInput.length > 0) {
+    if (
+      !isCurrentRunSaved &&
+      savedRunIdRef.current !== snap.runEntryId &&
+      trimmedInput.length > 0
+    ) {
+      savedRunIdRef.current = snap.runEntryId;
       const { rank, savedName } = onSaveHallOfFame(trimmedInput, snap);
       setSavedRecord({
         runEntryId: snap.runEntryId,
@@ -339,13 +350,6 @@ export const StatusModal: React.FC<StatusModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-labelledby="outcome-modal-title"
-      onKeyDown={(e) => {
-        if (e.code === 'Escape') {
-          e.preventDefault();
-          e.stopPropagation();
-          ensureSavedBeforeExit(onReturnTitle);
-        }
-      }}
       className="fixed inset-0 z-30 flex items-center justify-center p-3 sm:p-4 bg-black/70"
     >
       <div
@@ -386,12 +390,12 @@ export const StatusModal: React.FC<StatusModalProps> = ({
         <p className="text-xs text-stone-300 mt-0.5">{deathDescription}</p>
 
         {/* 3 Tabular-Nums Mastery / Progress Stat Tiles */}
-        <div className="grid grid-cols-3 gap-2.5 my-4">
+        <div className="grid grid-cols-3 gap-2 sm:gap-2.5 my-4">
           <div className="p-2.5 rounded-xl bg-black/45 border border-white/10">
-            <div className="text-[10px] uppercase text-stone-400">
+            <div className="text-[10px] uppercase text-stone-400 whitespace-nowrap">
               {snap.isNewRecord ? 'New Record!' : 'Score / Best'}
             </div>
-            <div className="text-lg font-bold font-mono-tabular text-white mt-0.5">
+            <div className="text-base sm:text-lg font-bold font-mono-tabular text-white mt-0.5 whitespace-nowrap">
               {Math.round(snap.score)}
               <span className="text-xs text-stone-400 font-normal">
                 {' '}
@@ -401,21 +405,21 @@ export const StatusModal: React.FC<StatusModalProps> = ({
           </div>
 
           <div className="p-2.5 rounded-xl bg-black/45 border border-white/10">
-            <div className="text-[10px] uppercase text-stone-400">
+            <div className="text-[10px] uppercase text-stone-400 whitespace-nowrap">
               {snap.targetApples ? 'Stage Quota' : 'Harvested'}
             </div>
-            <div className="text-lg font-bold font-mono-tabular text-emerald-400 mt-0.5">
+            <div className="text-base sm:text-lg font-bold font-mono-tabular text-emerald-400 mt-0.5 whitespace-nowrap">
               {snap.targetApples
                 ? `${snap.applesEaten} / ${snap.targetApples}`
-                : `${snap.applesEaten} fruits`}
+                : `${snap.applesEaten}`}
             </div>
           </div>
 
           <div className="p-2.5 rounded-xl bg-black/45 border border-white/10">
-            <div className="text-[10px] uppercase text-stone-400">
-              Length · Combo
+            <div className="text-[10px] uppercase text-stone-400 whitespace-nowrap">
+              Len · Combo
             </div>
-            <div className="text-lg font-bold font-mono-tabular text-amber-300 mt-0.5">
+            <div className="text-base sm:text-lg font-bold font-mono-tabular text-amber-300 mt-0.5 whitespace-nowrap">
               {snap.peakLength} · {snap.maxCombo}x
             </div>
           </div>
@@ -450,7 +454,7 @@ export const StatusModal: React.FC<StatusModalProps> = ({
             >
               Hall of Fame Entry
             </label>
-            {isCurrentRunSaved ? (
+            {isCurrentRunSaved && savedRecord ? (
               <span className="text-[11px] font-semibold text-emerald-400 font-mono-tabular">
                 Saved as {savedRecord.name} · Rank #{savedRecord.rank}
               </span>

@@ -1,0 +1,31 @@
+name: Feature Request
+description: Suggest a new game mode, power-up, labyrinth chamber, theme, or quality-of-life enhancement
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have an idea to make **Serpentis** even better? Tell us about it below!
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or Motivation
+      description: What gameplay need, visual polish opportunity, or UX gap does this address?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Solution
+      description: Describe the feature, how it should behave, and any settings or controls involved.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Any alternative designs or mechanics you considered.

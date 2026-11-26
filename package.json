@@ -4,6 +4,17 @@
   "version": "1.0.0",
   "description": "Serpentis — A studio-grade tactile arcade snake game built with React 19, TypeScript, Tailwind CSS v4, and HTML5 Canvas 2D.",
   "license": "Apache-2.0",
+  "homepage": "https://doctorlestrange.github.io/Serpentis/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DoctorLestrange/Serpentis.git"
+  },
+  "bugs": {
+    "url": "https://github.com/DoctorLestrange/Serpentis/issues"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "keywords": [
     "snake",
     "arcade-game",
@@ -12,7 +23,8 @@
     "typescript",
     "tailwindcss",
     "web-audio",
-    "vite"
+    "vite",
+    "github-pages"
   ],
   "type": "module",
   "scripts": {
@@ -20,29 +32,23 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "tsx --test src/game/rules.test.ts",
-    "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "clean": "rm -rf dist",
+    "lint": "tsc --noEmit",
+    "check": "npm run lint && npm test && npm run build"
   },
   "dependencies": {
-    "@google/genai": "^2.4.0",
     "@tailwindcss/vite": "^4.3.3",
     "@vitejs/plugin-react": "^6.1.1",
-    "lucide-react": "^0.546.0",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
-    "vite": "^8.3.0",
-    "express": "^4.21.2",
-    "dotenv": "^17.2.3",
-    "motion": "^12.23.24"
+    "vite": "^8.3.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "autoprefixer": "^10.4.21",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.21.0",
-    "typescript": "^7.0.2",
-    "@types/express": "^4.17.21"
+    "typescript": "^7.0.2"
   }
 }

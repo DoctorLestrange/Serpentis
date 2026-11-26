@@ -190,12 +190,13 @@ export const PlayingHud: React.FC<PlayingHudProps> = ({
             <button
               type="button"
               tabIndex={-1}
+              disabled={!isInteractive}
               aria-label={isMuted ? 'Unmute Audio' : 'Mute Audio'}
               onClick={(e) => {
                 e.currentTarget.blur();
                 onToggleMute();
               }}
-              className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center bg-white/5 hover:bg-white/15 border border-white/10 text-stone-200 transition-colors cursor-pointer"
+              className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center bg-white/5 hover:bg-white/15 border border-white/10 text-stone-200 transition-colors cursor-pointer disabled:cursor-default"
               title="Mute / Unmute [M]"
             >
               {isMuted ? (
@@ -228,12 +229,13 @@ export const PlayingHud: React.FC<PlayingHudProps> = ({
             <button
               type="button"
               tabIndex={-1}
+              disabled={!isInteractive}
               aria-label="Restart Run"
               onClick={(e) => {
                 e.currentTarget.blur();
                 onRestart();
               }}
-              className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center bg-white/5 hover:bg-white/15 border border-white/10 text-stone-200 transition-colors cursor-pointer"
+              className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center bg-white/5 hover:bg-white/15 border border-white/10 text-stone-200 transition-colors cursor-pointer disabled:cursor-default"
               title="Restart Run [R]"
             >
               <svg
@@ -251,12 +253,13 @@ export const PlayingHud: React.FC<PlayingHudProps> = ({
             <button
               type="button"
               tabIndex={-1}
+              disabled={!isInteractive}
               aria-label="Pause Game"
               onClick={(e) => {
                 e.currentTarget.blur();
                 onPause();
               }}
-              className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center bg-emerald-500/20 hover:bg-emerald-500/35 border border-emerald-400/30 text-emerald-200 transition-colors cursor-pointer"
+              className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center bg-emerald-500/20 hover:bg-emerald-500/35 border border-emerald-400/30 text-emerald-200 transition-colors cursor-pointer disabled:cursor-default"
               title="Pause Game [P / Esc]"
             >
               <svg
@@ -272,7 +275,13 @@ export const PlayingHud: React.FC<PlayingHudProps> = ({
         </div>
 
         {/* Compact Mobile Sub-Status Strip (Visible only on mobile <768px) */}
-        <div className="flex md:hidden items-center justify-between px-1 text-[10px] font-bold tracking-wider uppercase text-stone-300">
+        <div
+          className="flex md:hidden items-center justify-between px-3 py-1 rounded-lg text-[10px] font-bold tracking-wider uppercase text-stone-200"
+          style={{
+            backgroundColor: palette.hudSurface,
+            border: `1px solid ${palette.hudBorder}`,
+          }}
+        >
           <div className="flex items-center gap-2">
             {config.mode === 'campaign' && sim.targetApples !== null ? (
               <span className="font-mono-tabular text-emerald-300">
@@ -284,7 +293,7 @@ export const PlayingHud: React.FC<PlayingHudProps> = ({
                 Time: {Math.ceil(sim.remainingTimeMs / 1000)}s
               </span>
             ) : (
-              <span className="font-mono-tabular text-stone-300">
+              <span className="font-mono-tabular text-stone-200">
                 Fruits: {sim.applesEaten} · Len: {sim.snake.length}
               </span>
             )}
@@ -308,14 +317,17 @@ export const PlayingHud: React.FC<PlayingHudProps> = ({
 
       {/* Touch / Mobile On-Screen Controls (Visible only on small screens when actively playing) */}
       {isInteractive && (
-        <div className="md:hidden flex items-end justify-between w-full max-w-md mx-auto pb-0.5 pointer-events-auto">
-          <div className="grid grid-cols-3 gap-1 w-32 h-28">
+        <div className="md:hidden flex items-end justify-between w-full max-w-md mx-auto pb-0.5 pointer-events-auto touch-none">
+          <div className="grid grid-cols-3 gap-1 w-32 h-28 touch-none">
             <div />
             <button
               type="button"
               aria-label="Steer Up"
-              onPointerDown={() => onSteer('UP')}
-              className="rounded-lg bg-stone-900/90 border border-white/15 flex items-center justify-center active:bg-emerald-600 text-white text-sm"
+              onPointerDown={(e) => {
+                e.preventDefault();
+                onSteer('UP');
+              }}
+              className="rounded-lg bg-stone-900/90 border border-white/15 flex items-center justify-center active:bg-emerald-600 text-white text-sm touch-none"
             >
               ▲
             </button>
@@ -323,8 +335,11 @@ export const PlayingHud: React.FC<PlayingHudProps> = ({
             <button
               type="button"
               aria-label="Steer Left"
-              onPointerDown={() => onSteer('LEFT')}
-              className="rounded-lg bg-stone-900/90 border border-white/15 flex items-center justify-center active:bg-emerald-600 text-white text-sm"
+              onPointerDown={(e) => {
+                e.preventDefault();
+                onSteer('LEFT');
+              }}
+              className="rounded-lg bg-stone-900/90 border border-white/15 flex items-center justify-center active:bg-emerald-600 text-white text-sm touch-none"
             >
               ◀
             </button>
@@ -332,8 +347,11 @@ export const PlayingHud: React.FC<PlayingHudProps> = ({
             <button
               type="button"
               aria-label="Steer Right"
-              onPointerDown={() => onSteer('RIGHT')}
-              className="rounded-lg bg-stone-900/90 border border-white/15 flex items-center justify-center active:bg-emerald-600 text-white text-sm"
+              onPointerDown={(e) => {
+                e.preventDefault();
+                onSteer('RIGHT');
+              }}
+              className="rounded-lg bg-stone-900/90 border border-white/15 flex items-center justify-center active:bg-emerald-600 text-white text-sm touch-none"
             >
               ▶
             </button>
@@ -341,8 +359,11 @@ export const PlayingHud: React.FC<PlayingHudProps> = ({
             <button
               type="button"
               aria-label="Steer Down"
-              onPointerDown={() => onSteer('DOWN')}
-              className="rounded-lg bg-stone-900/90 border border-white/15 flex items-center justify-center active:bg-emerald-600 text-white text-sm"
+              onPointerDown={(e) => {
+                e.preventDefault();
+                onSteer('DOWN');
+              }}
+              className="rounded-lg bg-stone-900/90 border border-white/15 flex items-center justify-center active:bg-emerald-600 text-white text-sm touch-none"
             >
               ▼
             </button>
@@ -352,10 +373,14 @@ export const PlayingHud: React.FC<PlayingHudProps> = ({
           <button
             type="button"
             aria-label="Hold Boost"
-            onPointerDown={() => onBoostChange(true)}
+            onPointerDown={(e) => {
+              e.preventDefault();
+              onBoostChange(true);
+            }}
             onPointerUp={() => onBoostChange(false)}
+            onPointerCancel={() => onBoostChange(false)}
             onPointerLeave={() => onBoostChange(false)}
-            className="h-14 px-5 rounded-xl bg-emerald-600/90 active:bg-emerald-500 border border-emerald-300/40 text-white font-bold text-xs tracking-wider uppercase shadow-lg"
+            className="h-14 px-5 rounded-xl bg-emerald-600/90 active:bg-emerald-500 border border-emerald-300/40 text-white font-bold text-xs tracking-wider uppercase shadow-lg touch-none"
           >
             BOOST
           </button>

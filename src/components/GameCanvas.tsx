@@ -6,7 +6,11 @@ import {
   computeDemoDirection,
   createInitialSimulationState,
   enqueueDirection,
+  getDirectionDelta,
   getEffectiveTickIntervalMs,
+  pointKey,
+  resolveEffectiveConfig,
+  spawnFruit,
   stepSimulation,
 } from '../game/rules';
 import { THEMES } from '../game/themes';
@@ -42,14 +46,16 @@ interface SpineSample {
 }
 
 function createShowcaseDemoState(config: GameConfig): SimulationState {
-  const base = createInitialSimulationState({
+  const demoConfig: GameConfig = {
     ...config,
     multiFruitCount: Math.max(3, config.multiFruitCount) as 1 | 3 | 5,
-  });
+  };
+  const base = createInitialSimulationState(demoConfig);
   const spawnY = Math.max(2, Math.floor(base.rows / 2) - 3);
   const startX = Math.min(base.cols - 3, Math.floor(base.cols * 0.68));
-  // Coiled initial showcase posture with a turn so the smooth curved body is visible immediately
-  base.snake = [
+  // Coiled initial showcase posture with a turn so the smooth curved body is visible immediately,
+  // falling back to the guaranteed-clear horizontal spawn lane if any coiled cell hits an obstacle or portal.
+  const coiled: Point[] = [
     { x: startX, y: spawnY },
     { x: startX - 1, y: spawnY },
     { x: startX - 2, y: spawnY },
@@ -60,8 +66,34 @@ function createShowcaseDemoState(config: GameConfig): SimulationState {
     { x: startX - 4, y: spawnY + 3 },
     { x: startX - 5, y: spawnY + 3 },
   ];
-  base.prevSnake = base.snake.map((p) => ({ ...p }));
-  base.direction = 'RIGHT';
+  const portalKeys = new Set<string>();
+  for (const p of base.portals) {
+    portalKeys.add(pointKey(p.a));
+    portalKeys.add(pointKey(p.b));
+  }
+  const coiledClear = coiled.every(
+    (pt) =>
+      pt.x >= 1 &&
+      pt.x < base.cols - 1 &&
+      pt.y >= 1 &&
+      pt.y < base.rows - 1 &&
+      !base.obstacleSet.has(pointKey(pt)) &&
+      !portalKeys.has(pointKey(pt))
+  );
+  if (coiledClear) {
+    base.snake = coiled;
+    base.prevSnake = coiled.map((p) => ({ ...p }));
+    base.direction = 'RIGHT';
+    const snakeKeys = new Set(coiled.map(pointKey));
+    const overlapping = base.fruits.filter((f) => snakeKeys.has(pointKey(f)));
+    if (overlapping.length > 0) {
+      base.fruits = base.fruits.filter((f) => !snakeKeys.has(pointKey(f)));
+      for (const removed of overlapping) {
+        const replacement = spawnFruit(base, removed.type);
+        if (replacement) base.fruits.push(replacement);
+      }
+    }
+  }
   return base;
 }
 
@@ -168,6 +200,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       updateCanvasSize();
     });
     resizeObserver.observe(container);
+    window.addEventListener('resize', updateCanvasSize);
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (screenStateRef.current !== 'playing') return;
@@ -196,7 +229,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         case 'ShiftLeft':
         case 'ShiftRight':
           e.preventDefault();
-          if (sim.stamina > 10) {
+          if (!e.repeat && sim.stamina > 10) {
             sim.isBoosting = true;
           }
           return;
@@ -204,6 +237,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
       if (dir) {
         e.preventDefault();
+        if (e.repeat) return;
         const nextQ = enqueueDirection(sim.direction, sim.inputQueue, dir);
         if (nextQ.length !== sim.inputQueue.length) {
           sim.inputQueue = nextQ;
@@ -243,6 +277,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     };
     const handleTouchMove = (e: TouchEvent) => {
       if (screenStateRef.current !== 'playing' || e.touches.length === 0) return;
+      e.preventDefault();
       const dx = e.touches[0].clientX - touchStartX;
       const dy = e.touches[0].clientY - touchStartY;
       if (Math.hypot(dx, dy) < 24) return;
@@ -272,7 +307,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     document.addEventListener('visibilitychange', handleBlurOrVisibility);
     window.addEventListener('pointermove', handlePointerMove);
     canvas.addEventListener('touchstart', handleTouchStart, { passive: true });
-    canvas.addEventListener('touchmove', handleTouchMove, { passive: true });
+    canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
 
     let lastTime = performance.now();
     let rafId = 0;
@@ -308,13 +343,16 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     const scheduleNextFrame = () => {
       if (disposed) return;
       const st = screenStateRef.current;
-      const hasActiveParticles = particlesRef.current.particles.some((p) => p.active);
-      const delay =
-        st === 'paused' || (st === 'gameover' && !hasActiveParticles)
-          ? 120
-          : st === 'title'
-          ? 55
-          : 30;
+      const hasActiveFx =
+        particlesRef.current.particles.some((p) => p.active) ||
+        particlesRef.current.texts.some((t) => t.active);
+
+      if (st === 'playing' || (st === 'gameover' && hasActiveFx)) {
+        rafId = requestAnimationFrame(loop);
+        return;
+      }
+
+      const delay = st === 'title' ? 33 : 120;
       timerId = setTimeout(() => {
         if (!disposed) {
           rafId = requestAnimationFrame(loop);
@@ -344,17 +382,18 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           demo = createShowcaseDemoState(activeConfig);
           demoSimRef.current = demo;
         }
+        const demoConfig: GameConfig = {
+          ...activeConfig,
+          multiFruitCount: Math.max(3, activeConfig.multiFruitCount) as 1 | 3 | 5,
+        };
+        const demoWrapWalls = resolveEffectiveConfig(demoConfig).wrapWalls;
         const tickMs = 100;
         tickAccumulatorMsRef.current += dt * 1000;
         while (tickAccumulatorMsRef.current >= tickMs) {
           tickAccumulatorMsRef.current -= tickMs;
-          const aiDir = computeDemoDirection(demo);
+          const aiDir = computeDemoDirection(demo, demoWrapWalls);
           demo.inputQueue = [aiDir];
-          stepSimulation(demo, {
-            ...activeConfig,
-            wrapWalls: true,
-            multiFruitCount: Math.max(3, activeConfig.multiFruitCount) as 1 | 3 | 5,
-          });
+          stepSimulation(demo, demoConfig);
           if (demo.status !== 'running') {
             demo = createShowcaseDemoState(activeConfig);
             demoSimRef.current = demo;
@@ -365,7 +404,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
             demo.prevSnake.pop();
           }
         }
-        const alpha = Math.min(1, tickAccumulatorMsRef.current / tickMs);
+        const alpha =
+          demo.tickCount === 0
+            ? 1
+            : Math.min(1, tickAccumulatorMsRef.current / tickMs);
         const metrics = computeBoardMetrics(demo.cols, demo.rows, true);
         renderArena(
           ctx,
@@ -540,7 +582,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       const tickIntervalMs = getEffectiveTickIntervalMs(sim, activeConfig);
       const alpha =
         sim.status === 'running'
-          ? Math.min(1, tickAccumulatorMsRef.current / tickIntervalMs)
+          ? sim.tickCount === 0
+            ? 1
+            : Math.min(1, tickAccumulatorMsRef.current / tickIntervalMs)
           : 1;
 
       renderArena(
@@ -566,6 +610,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       if (timerId) clearTimeout(timerId);
       cancelAnimationFrame(rafId);
       resizeObserver.disconnect();
+      window.removeEventListener('resize', updateCanvasSize);
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('blur', handleBlurOrVisibility);
@@ -625,12 +670,15 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     ctx.fill();
 
     if (activeConfig.showGrid) {
-      // Alternating subtle checkerboard grid tiles
+      // Batched checkerboard grid: 1 background fill + 1 single path fill for alternating tiles
+      ctx.fillStyle = palette.boardGridB;
+      ctx.fillRect(offsetX, offsetY, boardW, boardH);
+
+      ctx.fillStyle = palette.boardGridA;
+      ctx.beginPath();
       for (let r = 0; r < sim.rows; r++) {
-        for (let c = 0; c < sim.cols; c++) {
-          ctx.fillStyle =
-            (r + c) % 2 === 0 ? palette.boardGridA : palette.boardGridB;
-          ctx.fillRect(
+        for (let c = (r % 2); c < sim.cols; c += 2) {
+          ctx.rect(
             offsetX + c * cellSize,
             offsetY + r * cellSize,
             cellSize,
@@ -638,6 +686,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           );
         }
       }
+      ctx.fill();
     } else {
       // Seamless Realistic Arena Surface (No Grid View) - Fast Single-Batch Render
       ctx.fillStyle = palette.boardBg;
@@ -674,12 +723,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       ctx.restore();
     }
 
-    // Perimeter Wall Indicator
-    const isWrap =
-      activeConfig.mode === 'zen' ||
-      (activeConfig.mode === 'campaign'
-        ? [3, 5].includes(activeConfig.campaignStage)
-        : activeConfig.wrapWalls);
+    // Perimeter Wall Indicator (Single Source of Truth from resolveEffectiveConfig)
+    const isWrap = resolveEffectiveConfig(activeConfig).wrapWalls;
 
     ctx.save();
     ctx.lineWidth = 3;
@@ -787,7 +832,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         ref={canvasRef}
         data-testid="snake-canvas"
         aria-label="Serpentis Game Arena Canvas"
-        className="block w-full h-full"
+        className="block w-full h-full touch-none"
       />
     </div>
   );
@@ -1079,8 +1124,59 @@ function renderSerpent(
 
   const allChainSamples: SpineSample[][] = [];
   const STEP_S = 0.24; // ~4.2 samples per cell
+  let leadHeadOverride: { x: number; y: number; angle: number } | null = null;
 
-  for (const sub of subTracks) {
+  for (let subIdx = 0; subIdx < subTracks.length; subIdx++) {
+    const sub = subTracks[subIdx];
+
+    // Special case: head just warped through a portal or wrapped across a board edge,
+    // so subTracks[0] has only 1 cell. Synthesize a smooth emergence along sim.direction
+    // so the sculpted head never stays frozen on the old edge for a tick.
+    if (subIdx === 0 && sub.cells.length === 1) {
+      const dirDelta = getDirectionDelta(sim.direction);
+      const gx = sub.cells[0].x - dirDelta.x * (1 - alpha) * 0.5;
+      const gy = sub.cells[0].y - dirDelta.y * (1 - alpha) * 0.5;
+      const hx = offsetX + (gx + 0.5) * cellSize;
+      const hy = offsetY + (gy + 0.5) * cellSize;
+      leadHeadOverride = {
+        x: hx,
+        y: hy,
+        angle: Math.atan2(dirDelta.y, dirDelta.x),
+      };
+      const neckRadius = cellSize * 0.39;
+      const entryX = offsetX + (sub.cells[0].x - dirDelta.x * 0.5 + 0.5) * cellSize;
+      const entryY = offsetY + (sub.cells[0].y - dirDelta.y * 0.5 + 0.5) * cellSize;
+      const nx = -dirDelta.y;
+      const ny = dirDelta.x;
+      if (Math.hypot(hx - entryX, hy - entryY) > 1) {
+        allChainSamples.push([
+          {
+            x: hx,
+            y: hy,
+            tx: dirDelta.x,
+            ty: dirDelta.y,
+            nx,
+            ny,
+            radius: neckRadius,
+            distFromHeadCells: 0,
+            u: 0,
+          },
+          {
+            x: entryX,
+            y: entryY,
+            tx: dirDelta.x,
+            ty: dirDelta.y,
+            nx,
+            ny,
+            radius: neckRadius * 0.96,
+            distFromHeadCells: 0.5,
+            u: Math.min(1, 0.5 / totalSpan),
+          },
+        ]);
+      }
+      continue;
+    }
+
     const subMinS = sub.globalStartIdx;
     const subMaxS = sub.globalStartIdx + sub.cells.length - 1;
 
@@ -1159,14 +1255,24 @@ function renderSerpent(
     }
   }
 
-  // Render Sculpted Anatomical Serpent Head at the lead sample
+  // Render Sculpted Anatomical Serpent Head at the lead sample (or portal/wrap emergence point)
   const leadSample = allChainSamples[0]?.[0];
-  if (leadSample) {
+  const headPose = leadHeadOverride
+    ? leadHeadOverride
+    : leadSample
+    ? {
+        x: leadSample.x,
+        y: leadSample.y,
+        angle: Math.atan2(leadSample.ty, leadSample.tx),
+      }
+    : null;
+
+  if (headPose) {
     renderSculptedHead(
       ctx,
-      leadSample.x,
-      leadSample.y,
-      Math.atan2(leadSample.ty, leadSample.tx),
+      headPose.x,
+      headPose.y,
+      headPose.angle,
       cellSize,
       palette,
       sim,
@@ -1345,12 +1451,18 @@ function renderSculptedHead(
   ctx.translate(hx, hy);
   ctx.rotate(angle);
 
-  // 1. Flicking Forked Tongue when near edible fruit or periodically
-  const nearestFruit = sim.fruits.find((f) => f.type !== 'poison');
+  // 1. Flicking Forked Tongue when near closest edible fruit or periodically
   const headCell = sim.snake[0];
-  const fruitDist = nearestFruit
-    ? Math.hypot(nearestFruit.x - headCell.x, nearestFruit.y - headCell.y)
-    : 99;
+  let nearestFruit: FruitItem | undefined;
+  let fruitDist = 99;
+  for (const f of sim.fruits) {
+    if (f.type === 'poison') continue;
+    const d = Math.hypot(f.x - headCell.x, f.y - headCell.y);
+    if (d < fruitDist) {
+      fruitDist = d;
+      nearestFruit = f;
+    }
+  }
   if (fruitDist < 4.8 || Math.sin(now / 150) > 0.65) {
     const tongueExtend = headR * (0.58 + Math.sin(now / 55) * 0.16);
     const tipX = headR * 1.02 + tongueExtend;

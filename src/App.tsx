@@ -23,8 +23,23 @@ import {
 } from './game/types';
 
 export default function App() {
-  const [config, setConfig] = useState<GameConfig>(() => loadConfig());
   const [profile, setProfile] = useState<PlayerProfile>(() => loadProfile());
+  const profileRef = useRef<PlayerProfile>(profile);
+  profileRef.current = profile;
+
+  const [config, setConfig] = useState<GameConfig>(() => {
+    const loadedConfig = loadConfig();
+    const loadedProfile = loadProfile();
+    if (loadedConfig.campaignStage > loadedProfile.highestUnlockedStage) {
+      const clamped = {
+        ...loadedConfig,
+        campaignStage: loadedProfile.highestUnlockedStage,
+      };
+      saveConfig(clamped);
+      return clamped;
+    }
+    return loadedConfig;
+  });
   const [isMuted, setIsMuted] = useState<boolean>(() => soundEngine.isMuted());
 
   const [screenState, setScreenState] = useState<AppScreenState>(() => {
@@ -39,7 +54,7 @@ export default function App() {
 
   const [runId, setRunId] = useState<number>(1);
   const [hudSim, setHudSim] = useState<SimulationState>(() =>
-    createInitialSimulationState(loadConfig())
+    createInitialSimulationState(config)
   );
   const [runSnapshot, setRunSnapshot] = useState<RunSnapshot | null>(null);
 
@@ -49,6 +64,17 @@ export default function App() {
   useEffect(() => {
     document.body.dataset.state = screenState;
   }, [screenState]);
+
+  // Unlock Web Audio cleanly on first user interaction
+  useEffect(() => {
+    const handleUnlock = () => soundEngine.unlock();
+    window.addEventListener('pointerdown', handleUnlock, { passive: true });
+    window.addEventListener('keydown', handleUnlock, { passive: true });
+    return () => {
+      window.removeEventListener('pointerdown', handleUnlock);
+      window.removeEventListener('keydown', handleUnlock);
+    };
+  }, []);
 
   const handleUpdateConfig = useCallback((partial: Partial<GameConfig>) => {
     setConfig((prev) => {
@@ -60,6 +86,7 @@ export default function App() {
 
   const handleResetProfile = useCallback(() => {
     const fresh = resetProfile();
+    profileRef.current = fresh;
     setProfile(fresh);
     setConfig((prev) => {
       const next = { ...prev, campaignStage: 1 };
@@ -69,6 +96,7 @@ export default function App() {
   }, []);
 
   const handleStartGame = useCallback(() => {
+    soundEngine.unlock();
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
@@ -79,6 +107,7 @@ export default function App() {
   }, []);
 
   const handleRestartRun = useCallback(() => {
+    soundEngine.unlock();
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
@@ -89,6 +118,7 @@ export default function App() {
   }, []);
 
   const handleNextStage = useCallback(() => {
+    soundEngine.unlock();
     setConfig((prev) => {
       const nextStage = Math.min(5, prev.campaignStage + 1);
       const next = { ...prev, campaignStage: nextStage };
@@ -106,12 +136,14 @@ export default function App() {
 
   const handleRunEnd = useCallback(
     (finalSim: SimulationState) => {
-      const prevBest = profile.highScores[config.mode] || 0;
+      const currentProfile = profileRef.current;
+      const prevBest = currentProfile.highScores[config.mode] || 0;
       const { updatedProfile, isNewRecord, newlyUnlocked } = recordCompletedRun(
-        profile,
+        currentProfile,
         config,
         finalSim
       );
+      profileRef.current = updatedProfile;
       setProfile(updatedProfile);
 
       const frozenSnapshot: RunSnapshot = {
@@ -135,20 +167,21 @@ export default function App() {
       document.body.dataset.state = 'gameover';
       setScreenState('gameover');
     },
-    [config, profile, runId]
+    [config, runId]
   );
 
   const handleSaveHallOfFame = useCallback(
     (playerName: string, snap: RunSnapshot) => {
       const { updatedProfile, rank, entry } = recordHallOfFameEntry(
-        profile,
+        profileRef.current,
         snap,
         playerName
       );
+      profileRef.current = updatedProfile;
       setProfile(updatedProfile);
       return { rank, savedName: entry.playerName };
     },
-    [profile]
+    []
   );
 
   const handleToggleMute = useCallback(() => {
@@ -159,12 +192,29 @@ export default function App() {
   const handlePause = useCallback(() => {
     // Only allow pausing while simulation is actively running (not during end-of-run hitstop beat)
     if (hudSim.status !== 'running') return;
+    externalBoostRef.current?.(false);
     document.body.dataset.state = 'paused';
     setScreenState('paused');
   }, [hudSim.status]);
 
+  // Auto-pause active gameplay if the browser tab is hidden so players never return to an unintended crash
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden && screenState === 'playing' && hudSim.status === 'running') {
+        externalBoostRef.current?.(false);
+        document.body.dataset.state = 'paused';
+        setScreenState('paused');
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () =>
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [screenState, hudSim.status]);
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (e.repeat) return;
+
       const activeEl = document.activeElement;
       const isTypingInInput =
         activeEl instanceof HTMLElement &&

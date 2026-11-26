@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 import {
   DEFAULT_CONFIG,
   advanceTimers,
+  computeDemoDirection,
   createInitialSimulationState,
   enqueueDirection,
   pointKey,
+  resolveEffectiveConfig,
   stepSimulation,
 } from './rules';
 import {
@@ -335,4 +337,78 @@ test('poison skulls spawn safely, are never pulled by magnets, and trigger defea
   assert.equal(state.status, 'defeat');
   assert.equal(state.deathReason, 'poison');
   assert.equal(state.lastEvent.type, 'poison_hit');
+});
+
+test('zen mode strictly disables poison hazards and obstacles even when enabled in config', () => {
+  const zenConfig: GameConfig = {
+    ...DEFAULT_CONFIG,
+    mode: 'zen',
+    speed: 'hyper',
+    poisonEnabled: true,
+    obstaclePreset: 'labyrinth',
+  };
+  const resolved = resolveEffectiveConfig(zenConfig);
+  assert.equal(resolved.poisonEnabled, false);
+  assert.equal(resolved.wrapWalls, true);
+  assert.equal(resolved.obstaclePreset, 'none');
+
+  const state = createInitialSimulationState(zenConfig, () => 0.5);
+  assert.equal(state.obstacles.length, 0);
+  assert.equal(state.fruits.some((f) => f.type === 'poison'), false);
+});
+
+test('computeDemoDirection avoids solid walls when wrapWalls is false', () => {
+  const solidConfig: GameConfig = { ...DEFAULT_CONFIG, wrapWalls: false };
+  const state = createInitialSimulationState(solidConfig, () => 0.5);
+  state.snake = [
+    { x: state.cols - 1, y: 5 },
+    { x: state.cols - 2, y: 5 },
+    { x: state.cols - 3, y: 5 },
+  ];
+  state.direction = 'RIGHT';
+  state.fruits = [
+    { id: 'f1', x: 0, y: 5, type: 'apple', spawnedAtTick: 0 },
+  ];
+
+  const dir = computeDemoDirection(state, false);
+  assert.notEqual(dir, 'RIGHT');
+  assert.ok(dir === 'UP' || dir === 'DOWN');
+});
+
+test('full-board fallback clears poison skull to spawn a final apple instead of prematurely ending', () => {
+  const config: GameConfig = {
+    ...DEFAULT_CONFIG,
+    boardSize: 'compact',
+    poisonEnabled: true,
+    specialFruitsEnabled: false,
+  };
+  const state = createInitialSimulationState(config, () => 0.5);
+  // Fill every cell except (0,0) for the direct apple and (0,1) for a poison skull
+  state.obstacles = [];
+  state.obstacleSet = new Set();
+  state.portals = [];
+  const snakeCells: { x: number; y: number }[] = [];
+  for (let y = 0; y < state.rows; y++) {
+    for (let x = 0; x < state.cols; x++) {
+      if ((x === 0 && y === 0) || (x === 0 && y === 1)) continue;
+      snakeCells.push({ x, y });
+    }
+  }
+  // Place head at (1, 0) moving LEFT onto (0, 0)
+  const headIdx = snakeCells.findIndex((p) => p.x === 1 && p.y === 0);
+  const [head] = snakeCells.splice(headIdx, 1);
+  state.snake = [head, ...snakeCells];
+  state.prevSnake = state.snake.map((p) => ({ ...p }));
+  state.direction = 'LEFT';
+  state.fruits = [
+    { id: 'last-apple', x: 0, y: 0, type: 'apple', spawnedAtTick: 0 },
+    { id: 'blocking-poison', x: 0, y: 1, type: 'poison', spawnedAtTick: 0, ttlTicks: 110 },
+  ];
+
+  stepSimulation(state, config, () => 0.5);
+  assert.equal(state.status, 'running');
+  assert.equal(state.fruits.length, 1);
+  assert.equal(state.fruits[0].type, 'apple');
+  assert.equal(state.fruits[0].x, 0);
+  assert.equal(state.fruits[0].y, 1);
 });

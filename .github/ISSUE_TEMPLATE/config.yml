@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Play Live Demo
+    url: https://doctorlestrange.github.io/Serpentis/
+    about: Launch the hosted Serpentis web demo on GitHub Pages.
+  - name: Security Policy
+    url: https://github.com/DoctorLestrange/Serpentis/blob/main/SECURITY.md
+    about: Report a security vulnerability privately instead of opening a public issue.

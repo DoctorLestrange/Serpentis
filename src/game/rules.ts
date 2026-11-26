@@ -248,7 +248,7 @@ export function generatePortals(
     return neighbors.every((k) => !obstacleSet.has(k));
   };
 
-  const findFreeNear = (targetX: number, targetY: number): Point => {
+  const findFreeNear = (targetX: number, targetY: number): Point | null => {
     for (let r = 0; r <= 6; r++) {
       for (let dx = -r; dx <= r; dx++) {
         for (let dy = -r; dy <= r; dy++) {
@@ -261,11 +261,14 @@ export function generatePortals(
         }
       }
     }
-    return { x: targetX, y: targetY };
+    return null;
   };
 
   const a = findFreeNear(3, rows - 3);
   const b = findFreeNear(cols - 4, 3);
+  if (!a || !b || (a.x === b.x && a.y === b.y)) {
+    return [];
+  }
 
   return [
     {
@@ -381,7 +384,7 @@ export function resolveEffectiveConfig(config: GameConfig): {
       wrapWalls: true,
       obstaclePreset: 'none',
       portalsEnabled: config.portalsEnabled,
-      poisonEnabled: config.poisonEnabled,
+      poisonEnabled: false,
       targetApples: null,
       initialTimeMs: null,
     };
@@ -845,7 +848,11 @@ export function stepSimulation(
 
   // Safety guarantee: always keep at least 1 edible apple on the board, or declare victory if the board is 100% full!
   if (!state.fruits.some((f) => f.type === 'apple')) {
-    const fallback = spawnFruit(state, 'apple', rng);
+    let fallback = spawnFruit(state, 'apple', rng);
+    if (!fallback && state.fruits.some((f) => f.type === 'poison')) {
+      state.fruits = state.fruits.filter((f) => f.type !== 'poison');
+      fallback = spawnFruit(state, 'apple', rng);
+    }
     if (fallback) {
       state.fruits.push(fallback);
     } else {
@@ -880,13 +887,24 @@ function addOrRefreshEffect(
  * Autonomous AI controller for the Title Screen live showcase backdrop.
  * Steers the demo snake smoothly toward the nearest fruit while avoiding walls, obstacles, and its own body.
  */
-export function computeDemoDirection(state: SimulationState): Direction {
+export function computeDemoDirection(
+  state: SimulationState,
+  wrapWalls = true
+): Direction {
   const head = state.snake[0];
   const edibleFruits = state.fruits.filter((f) => f.type !== 'poison');
-  const target = edibleFruits[0] || {
+  let target: Point = {
     x: Math.floor(state.cols / 2),
     y: Math.floor(state.rows / 2),
   };
+  let bestTargetDist = Infinity;
+  for (const f of edibleFruits) {
+    const d = Math.abs(f.x - head.x) + Math.abs(f.y - head.y);
+    if (d < bestTargetDist) {
+      bestTargetDist = d;
+      target = f;
+    }
+  }
 
   const candidates: Direction[] = ['UP', 'DOWN', 'LEFT', 'RIGHT'].filter(
     (d) => !isOppositeDirection(state.direction, d as Direction)
@@ -907,8 +925,16 @@ export function computeDemoDirection(state: SimulationState): Direction {
 
   for (const dir of candidates) {
     const delta = getDirectionDelta(dir);
-    const nx = (head.x + delta.x + state.cols) % state.cols;
-    const ny = (head.y + delta.y + state.rows) % state.rows;
+    let nx = head.x + delta.x;
+    let ny = head.y + delta.y;
+
+    if (nx < 0 || nx >= state.cols || ny < 0 || ny >= state.rows) {
+      if (!wrapWalls) {
+        continue;
+      }
+      nx = (nx + state.cols) % state.cols;
+      ny = (ny + state.rows) % state.rows;
+    }
     const key = `${nx},${ny}`;
 
     if (hazardSet.has(key)) {
@@ -919,8 +945,13 @@ export function computeDemoDirection(state: SimulationState): Direction {
     let openNeighbors = 0;
     for (const d2 of ['UP', 'DOWN', 'LEFT', 'RIGHT'] as Direction[]) {
       const del2 = getDirectionDelta(d2);
-      const nnx = (nx + del2.x + state.cols) % state.cols;
-      const nny = (ny + del2.y + state.rows) % state.rows;
+      let nnx = nx + del2.x;
+      let nny = ny + del2.y;
+      if (nnx < 0 || nnx >= state.cols || nny < 0 || nny >= state.rows) {
+        if (!wrapWalls) continue;
+        nnx = (nnx + state.cols) % state.cols;
+        nny = (nny + state.rows) % state.rows;
+      }
       const k2 = `${nnx},${nny}`;
       if (!hazardSet.has(k2)) {
         openNeighbors++;

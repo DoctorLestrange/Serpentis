@@ -1,0 +1,80 @@
+name: Bug Report
+description: Report a gameplay bug, visual glitch, or layout issue in Serpentis
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve **Serpentis**! Please include clear reproduction steps and your device/browser details below.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the bug clearly and concisely.
+      placeholder: e.g., Snake clipped through a stone pillar after activating Phase Plum...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Step-by-step instructions to trigger the issue.
+      value: |
+        1. Open Serpentis and select mode '...'
+        2. Configure settings '...'
+        3. Perform action '...'
+        4. Observe error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen instead?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Game Mode
+      options:
+        - Classic Arcade
+        - Labyrinth Stages
+        - Time Blitz 90s
+        - Zen Endless
+        - Title Screen / Settings / Hall of Fame
+    validations:
+      required: true
+
+  - type: dropdown
+    id: theme
+    attributes:
+      label: Visual Theme
+      options:
+        - Botanical Slate
+        - Obsidian Gold
+        - Phosphor CRT
+        - Alabaster Studio
+        - Any / Not Theme-Specific
+    validations:
+      required: false
+
+  - type: input
+    id: environment
+    attributes:
+      label: Device, OS & Browser
+      description: Include viewport size if reporting a layout or mobile issue.
+      placeholder: e.g., iPhone 15 (iOS 18, Safari) or Desktop Windows 11 (Chrome 130, 1440x900)
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Screenshots or Console Logs
+      description: Paste any relevant screenshots, screen recordings, or browser console errors.
